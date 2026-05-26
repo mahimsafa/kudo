@@ -1,0 +1,60 @@
+{
+  "skill_name": "documentation-sync",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "You are reviewing a Kudo feature branch before PR. The diff only renames local variables and moves helper functions inside `internal/reconciler/reconciler.go`; tests were updated for package paths but runtime behavior is unchanged. Existing docs have a few awkward sentences. Decide whether documentation needs updating and report using the Documentation Sync output sections.",
+      "expected_output": "No docs update. The response should identify this as an internal refactor/style temptation with no user- or operator-visible behavior change.",
+      "files": [],
+      "expectations": [
+        "The output says no documentation update is needed.",
+        "The output identifies the changes as non-functional/internal refactor or behavior unchanged.",
+        "The output explicitly avoids grammar, wording, or style-only documentation edits."
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "You are reviewing a Kudo branch before PR. The diff adds `kudo status --watch` in `internal/cli/status.go`; the command streams status updates until interrupted. `docs/getting-started.md` already has a short status command section, and `docs/index.md` already links getting started. Decide what docs to update and report using the Documentation Sync output sections.",
+      "expected_output": "Update `docs/getting-started.md` minimally for the new flag. Do not rewrite the command guide or update `docs/index.md`.",
+      "files": [],
+      "expectations": [
+        "The output identifies `kudo status --watch` as a user-facing functional CLI change.",
+        "The output chooses `docs/getting-started.md` as the documentation target.",
+        "The output says not to update `docs/index.md` because no new doc is added."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "You are reviewing a Kudo branch that adds a new `kudo backup` workflow with `backup create`, `backup list`, and `backup restore`. There is no suitable existing docs page for backup workflows. Decide what documentation changes are needed and report using the Documentation Sync output sections.",
+      "expected_output": "Add a focused new docs page for backup workflow and update `docs/index.md`; avoid duplicating the full backup instructions across unrelated docs.",
+      "files": [],
+      "expectations": [
+        "The output identifies the backup workflow as a user-facing functional change.",
+        "The output calls for adding a focused new `docs/*.md` page.",
+        "The output calls for updating `docs/index.md` for the new documentation page."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "You are reviewing a Kudo branch before PR. The diff adds a user-facing `kudo status --watch` flag. `README.md` quick start would benefit from mentioning it, but the documentation-sync workflow is supposed to stay under `docs/` unless scope is explicitly expanded. Decide what to update and report using the Documentation Sync output sections.",
+      "expected_output": "Update the relevant `docs/` page, do not edit `README.md`, and mention README is outside scope unless explicitly requested.",
+      "files": [],
+      "expectations": [
+        "The output identifies the CLI flag as a user-facing functional change needing docs.",
+        "The output keeps the update under `docs/`.",
+        "The output explicitly says not to edit `README.md` unless scope is expanded."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Cursor's summary says the branch adds a new public API, but the actual verified diff only changes test fixtures and generated sample data. Existing docs remain accurate. Decide whether documentation needs updating and report using the Documentation Sync output sections.",
+      "expected_output": "Trust the verified diff over the summary and make no docs update because there is no functional behavior change.",
+      "files": [],
+      "expectations": [
+        "The output trusts the verified diff over Cursor's summary.",
+        "The output says no documentation update is needed.",
+        "The output explains that test fixtures or generated sample data do not change user-facing behavior."
+      ]
+    }
+  ]
+}
