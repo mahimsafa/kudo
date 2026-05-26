@@ -57,12 +57,18 @@ kudo nodes
 - **Reconciler**: Control loop that scales apps to desired replica count
 - **Proxy**: L7 reverse proxy with round-robin load balancing
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and documentation requirements.
+
 ## Documentation
 
+- [Repository Layout](ARCHITECTURE.md)
+- [Documentation Index](docs/index.md)
 - [Getting Started](docs/getting-started.md)
 - [Deploy a Node.js App (Docker)](docs/deploy-nodejs-docker.md)
 - [Configuration Reference](docs/configuration.md)
-- [Architecture](docs/architecture.md)
+- [Runtime Architecture](docs/architecture.md)
 
 ## License
 

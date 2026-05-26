@@ -1,3 +1,6 @@
 bin/
 .worktrees/
 worktrees/
+
+# Skill eval workspaces (regenerable local artifacts)
+.agents/skills/*-workspace/
