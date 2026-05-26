@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package kudo;
+
+option go_package = "github.com/mahimsafa/kudo/internal/api/proto";
+
+service KudoAPI {
+    rpc Apply(ApplyRequest) returns (ApplyResponse);
+    rpc GetStatus(StatusRequest) returns (StatusResponse);
+    rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+    rpc ListApplications(ListAppsRequest) returns (ListAppsResponse);
+    rpc ScaleApplication(ScaleRequest) returns (ScaleResponse);
+}
+
+message ApplyRequest {
+    string yaml_content = 1;
+}
+
+message ApplyResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+message StatusRequest {
+    string app_name = 1;
+}
+
+message StatusResponse {
+    string app_name = 1;
+    string adapter = 2;
+    int32 desired_replicas = 3;
+    int32 running_replicas = 4;
+    repeated InstanceInfo instances = 5;
+}
+
+message InstanceInfo {
+    string id = 1;
+    string node_id = 2;
+    string status = 3;
+    string address = 4;
+}
+
+message ListNodesRequest {}
+
+message ListNodesResponse {
+    repeated NodeInfo nodes = 1;
+}
+
+message NodeInfo {
+    string id = 1;
+    string name = 2;
+    string address = 3;
+    string status = 4;
+}
+
+message ListAppsRequest {}
+
+message ListAppsResponse {
+    repeated AppInfo apps = 1;
+}
+
+message AppInfo {
+    string name = 1;
+    string adapter = 2;
+    int32 replicas = 3;
+    string status = 4;
+}
+
+message ScaleRequest {
+    string app_name = 1;
+    int32 replicas = 2;
+}
+
+message ScaleResponse {
+    bool success = 1;
+    string message = 2;
+}

@@ -1,0 +1,21 @@
+kind: Application
+name: nodejs-api
+adapter: nodejs
+replicas: 2
+spec:
+  entrypoint: "npm start"
+  directory: /app
+  env:
+    NODE_ENV: production
+    PORT: "3000"
+  ports:
+    - 3000
+routing:
+  domain: api.example.com
+  path: /
+  algorithm: round-robin
+  healthcheck:
+    path: /health
+    interval: 10s
+    timeout: 3s
+    unhealthy_threshold: 3

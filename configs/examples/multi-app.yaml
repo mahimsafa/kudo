@@ -1,0 +1,30 @@
+kind: Application
+name: web-frontend
+adapter: docker
+replicas: 2
+spec:
+  image: nginx:alpine
+  ports:
+    - 80
+routing:
+  domain: www.example.com
+  algorithm: round-robin
+---
+kind: Application
+name: api-backend
+adapter: docker
+replicas: 3
+spec:
+  image: myregistry/api:v1.0
+  env:
+    DATABASE_URL: postgres://db:5432/app
+  ports:
+    - 8080
+routing:
+  domain: api.example.com
+  algorithm: round-robin
+  healthcheck:
+    path: /health
+    interval: 10s
+    timeout: 3s
+    unhealthy_threshold: 3

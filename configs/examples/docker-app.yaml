@@ -1,0 +1,16 @@
+kind: Application
+name: nginx-demo
+adapter: docker
+replicas: 2
+spec:
+  image: nginx:alpine
+  ports:
+    - 80
+routing:
+  domain: demo.example.com
+  algorithm: round-robin
+  healthcheck:
+    path: /
+    interval: 10s
+    timeout: 3s
+    unhealthy_threshold: 3
