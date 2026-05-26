@@ -2,33 +2,49 @@
 
 Kudo is a lightweight orchestration tool for deploying and managing applications across multiple VPS servers. It uses Raft consensus for cluster state, memberlist for gossip-based discovery, gRPC for inter-node communication, and a built-in L7 reverse proxy for load balancing.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash
+```
+
+Or with options:
+
+```bash
+# System-wide install of a specific version
+curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --system --version v0.1.0
+
+# User-level install
+curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --user
+
+# Uninstall
+curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --uninstall
+```
+
 ## Quick Start
 
 ```bash
-# Build
-make build
-
 # Bootstrap a new cluster (first node)
-./bin/kudo agent --bootstrap --name node-1
+kudo agent --bootstrap --name node-1
 
 # Generate a join token (on leader)
-./bin/kudo token create
+kudo token create
 
 # Join additional nodes
-./bin/kudo agent --join <leader-ip>:7946 --token <token> --name node-2
+kudo agent --join <leader-ip>:7946 --token <token> --name node-2
 
 # Deploy an application
-./bin/kudo apply -f configs/examples/docker-app.yaml
+kudo apply -f configs/examples/docker-app.yaml
 
 # Check status
-./bin/kudo status
-./bin/kudo status nginx-demo
+kudo status
+kudo status nginx-demo
 
 # Scale an application
-./bin/kudo scale nginx-demo --replicas 3
+kudo scale nginx-demo --replicas 3
 
 # List cluster nodes
-./bin/kudo nodes
+kudo nodes
 ```
 
 ## Architecture
