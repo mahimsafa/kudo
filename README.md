@@ -44,6 +44,7 @@ make build
 ## Documentation
 
 - [Getting Started](docs/getting-started.md)
+- [Deploy a Node.js App (Docker)](docs/deploy-nodejs-docker.md)
 - [Configuration Reference](docs/configuration.md)
 - [Architecture](docs/architecture.md)
 
