@@ -44,7 +44,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.Apply(ctx, &pb.ApplyRequest{YamlContent: string(data)})
 	if err != nil {
-		return fmt.Errorf("apply failed: %w", err)
+		return fmt.Errorf("apply failed: %w", wrapGRPCError(err))
 	}
 
 	if resp.Success {

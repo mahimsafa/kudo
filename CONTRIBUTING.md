@@ -39,6 +39,30 @@ In another terminal, use the CLI against the local gRPC endpoint (default `127.0
 ./bin/kudo status
 ```
 
+Keep the agent process running in the first terminal for as long as you use `apply`, `status`, `scale`, or `nodes`. Without a config file, the agent uses local dev defaults: state under `~/.kudo/data` and proxy on port `8088` (no sudo required on macOS).
+
+### Troubleshooting
+
+#### `apply` fails with `connection refused` on `127.0.0.1:9090`
+
+`kudo apply` is a **client**; it does not start the API server. This error means nothing is listening on the gRPC port—not a bad YAML path. The file is read before the CLI dials the agent.
+
+1. Start the agent in a **separate** terminal and leave it running:
+
+   ```bash
+   ./bin/kudo agent --bootstrap --name dev-node-1
+   ```
+
+2. Confirm the API is listening:
+
+   ```bash
+   lsof -iTCP:9090 -sTCP:LISTEN
+   ```
+
+3. Run `apply` again in the other terminal.
+
+If the agent exits immediately, read its stderr (common causes: port `7946` already in use, or Raft cannot write `data_dir`). If you have `/etc/kudo/kudo.yaml` from a system install, the agent loads it by default; ensure `api.grpc_port` is `9090`, or pass `--server host:port` on CLI commands.
+
 See [docs/getting-started.md](docs/getting-started.md) for a full cluster walkthrough.
 
 ## Making changes

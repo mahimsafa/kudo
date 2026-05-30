@@ -36,7 +36,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		resp, err := client.GetStatus(ctx, &pb.StatusRequest{AppName: args[0]})
 		if err != nil {
-			return err
+			return wrapGRPCError(err)
 		}
 		fmt.Printf("Application: %s\n", resp.AppName)
 		fmt.Printf("Adapter:     %s\n", resp.Adapter)
@@ -55,7 +55,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	} else {
 		resp, err := client.ListApplications(ctx, &pb.ListAppsRequest{})
 		if err != nil {
-			return err
+			return wrapGRPCError(err)
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "NAME\tADAPTER\tREPLICAS\n")
