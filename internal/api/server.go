@@ -68,6 +68,10 @@ func (s *Server) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResp
 		}, nil
 	}
 
+	if s.runtime != nil && s.runtime.SyncProxy != nil {
+		s.runtime.SyncProxy()
+	}
+
 	msg := fmt.Sprintf("applied %d application(s)", n)
 	if n == 1 {
 		msg = "applied 1 application"

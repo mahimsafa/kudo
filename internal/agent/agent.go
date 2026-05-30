@@ -78,6 +78,15 @@ func (a *Agent) Start(ctx context.Context) error {
 		a.executor.RegisterAdapter(dockerAdapter)
 	}
 
+	a.proxy = proxy.NewProxy()
+	proxyAddr := fmt.Sprintf(":%d", a.config.Proxy.HTTPPort)
+	go func() {
+		a.logger.Info("L7 proxy starting", zap.String("addr", proxyAddr), zap.String("bind", fmt.Sprintf("0.0.0.0:%d", a.config.Proxy.HTTPPort)))
+		if err := a.proxy.ListenAndServe(proxyAddr); err != nil {
+			a.logger.Error("proxy server error", zap.Error(err))
+		}
+	}()
+
 	grpcAddr := net.JoinHostPort("0.0.0.0", fmt.Sprintf("%d", a.config.API.GRPCPort))
 	a.api = api.NewServer(a.raft, a.logger, a.apiRuntime())
 	if err := a.api.Start(grpcAddr); err != nil {
@@ -85,19 +94,10 @@ func (a *Agent) Start(ctx context.Context) error {
 		return fmt.Errorf("starting API server: %w", err)
 	}
 
-	a.proxy = proxy.NewProxy()
-	proxyAddr := fmt.Sprintf(":%d", a.config.Proxy.HTTPPort)
-	go func() {
-		a.logger.Info("L7 proxy starting", zap.String("addr", proxyAddr))
-		if err := a.proxy.ListenAndServe(proxyAddr); err != nil {
-			a.logger.Error("proxy server error", zap.Error(err))
-		}
-	}()
-
 	runCtx, cancel := context.WithCancel(ctx)
 	a.cancel = cancel
 
-	reconcileLoop := reconciler.NewReconcileLoop(a.raft, a.logger, 10*time.Second, a.handleReconcileAction)
+	reconcileLoop := reconciler.NewReconcileLoop(a.raft, a.logger, 10*time.Second, a.handleReconcileAction, a.syncProxyRoutes)
 	go reconcileLoop.Start(runCtx)
 	go a.registerLocalNodeWhenLeader(runCtx)
 	go a.proxySyncLoop(runCtx)

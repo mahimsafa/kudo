@@ -72,18 +72,20 @@ func Reconcile(app state.Application, instances []state.Instance, nodes []state.
 }
 
 type ReconcileLoop struct {
-	raft     *raftlayer.RaftNode
-	logger   *zap.Logger
-	interval time.Duration
-	actionFn func(Action) error
+	raft       *raftlayer.RaftNode
+	logger     *zap.Logger
+	interval   time.Duration
+	actionFn   func(Action) error
+	onComplete func()
 }
 
-func NewReconcileLoop(raft *raftlayer.RaftNode, logger *zap.Logger, interval time.Duration, actionFn func(Action) error) *ReconcileLoop {
+func NewReconcileLoop(raft *raftlayer.RaftNode, logger *zap.Logger, interval time.Duration, actionFn func(Action) error, onComplete func()) *ReconcileLoop {
 	return &ReconcileLoop{
-		raft:     raft,
-		logger:   logger,
-		interval: interval,
-		actionFn: actionFn,
+		raft:       raft,
+		logger:     logger,
+		interval:   interval,
+		actionFn:   actionFn,
+		onComplete: onComplete,
 	}
 }
 
@@ -125,5 +127,8 @@ func (r *ReconcileLoop) reconcileAll() {
 				}
 			}
 		}
+	}
+	if r.onComplete != nil {
+		r.onComplete()
 	}
 }

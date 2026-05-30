@@ -29,6 +29,25 @@ func TestProxyRoutesbyDomain(t *testing.T) {
 	}
 }
 
+func TestProxyLocalhostFallback(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer backend.Close()
+
+	p := NewProxy()
+	p.AddRoute("127.0.0.1", "/", []string{backend.URL})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = "127.0.0.1:8088"
+	rr := httptest.NewRecorder()
+	p.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rr.Code)
+	}
+}
+
 func TestProxyReturns502WhenNoBackends(t *testing.T) {
 	p := NewProxy()
 	p.AddRoute("test.example.com", "/", nil)

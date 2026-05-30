@@ -42,6 +42,14 @@ func (a *Agent) syncProxyRoutes() {
 			a.proxy.UpdateBackends("127.0.0.1", path, backends)
 		}
 
+		a.logger.Info("proxy route updated",
+			zap.String("app", app.Name),
+			zap.String("domain", domain),
+			zap.String("path", path),
+			zap.Int("backends", len(backends)),
+			zap.Strings("backend_addrs", backends),
+		)
+
 		if app.Routing.IngressPort > 0 && app.Routing.IngressPort != a.config.Proxy.HTTPPort {
 			a.logger.Debug("app ingress port differs from agent proxy listen port",
 				zap.String("app", app.Name),
