@@ -16,15 +16,17 @@ import (
 
 type Server struct {
 	pb.UnimplementedKudoAPIServer
-	raft   *raftlayer.RaftNode
-	logger *zap.Logger
-	grpc   *grpc.Server
+	raft    *raftlayer.RaftNode
+	logger  *zap.Logger
+	grpc    *grpc.Server
+	runtime *Runtime
 }
 
-func NewServer(raft *raftlayer.RaftNode, logger *zap.Logger) *Server {
+func NewServer(raft *raftlayer.RaftNode, logger *zap.Logger, runtime *Runtime) *Server {
 	return &Server{
-		raft:   raft,
-		logger: logger,
+		raft:    raft,
+		logger:  logger,
+		runtime: runtime,
 	}
 }
 
@@ -74,6 +76,19 @@ func (s *Server) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResp
 		Success: true,
 		Message: msg,
 	}, nil
+}
+
+func (s *Server) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.RemoveResponse, error) {
+	s.logger.Info("remove request received")
+
+	if !s.raft.IsLeader() {
+		return &pb.RemoveResponse{
+			Success: false,
+			Message: "not cluster leader; retry remove once the agent has finished electing a leader",
+		}, nil
+	}
+
+	return removeYAMLFromRaft(ctx, s.raft, s.runtime, req.GetYamlContent(), 10*time.Second)
 }
 
 func (s *Server) GetStatus(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {

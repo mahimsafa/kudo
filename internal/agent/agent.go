@@ -79,7 +79,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	}
 
 	grpcAddr := net.JoinHostPort("0.0.0.0", fmt.Sprintf("%d", a.config.API.GRPCPort))
-	a.api = api.NewServer(a.raft, a.logger)
+	a.api = api.NewServer(a.raft, a.logger, a.apiRuntime())
 	if err := a.api.Start(grpcAddr); err != nil {
 		a.Shutdown()
 		return fmt.Errorf("starting API server: %w", err)
@@ -254,6 +254,23 @@ func (a *Agent) Shutdown() {
 		a.gossip.Shutdown()
 	}
 	a.logger.Info("agent shut down")
+}
+
+func (a *Agent) apiRuntime() *api.Runtime {
+	return &api.Runtime{
+		LocalNodeID: a.config.Node.Name,
+		StopInstance: func(ctx context.Context, adapter, instanceID string) error {
+			if a.executor == nil {
+				return fmt.Errorf("executor not available")
+			}
+			return a.executor.Stop(ctx, adapter, executor.StopRequest{InstanceID: instanceID})
+		},
+		RemoveRoute: func(domain, path string) {
+			if a.proxy != nil {
+				a.proxy.RemoveRoute(domain, path)
+			}
+		},
+	}
 }
 
 func (a *Agent) Raft() *raftlayer.RaftNode {

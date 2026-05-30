@@ -93,6 +93,16 @@ Check status:
 kudo status nginx-demo
 ```
 
+## Remove a deployment
+
+Use the same YAML file (or a manifest listing the apps to tear down). Kudo stops local containers, deletes cluster state, and clears proxy routes when configured.
+
+```bash
+kudo remove -f my-app.yaml
+```
+
+Removal is **all-or-nothing**: if another application still uses the same `routing.domain` + `routing.path`, nothing is removed and the CLI prints which app blocks teardown. Include every app that shares that route in the same file (for example both documents in a multi-app manifest) to remove them together.
+
 ## Add a Second Node
 
 On the new server:

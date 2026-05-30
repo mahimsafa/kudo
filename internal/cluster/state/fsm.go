@@ -102,6 +102,11 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("unmarshal app name: %w", err)
 		}
 		delete(f.state.Applications, name)
+		for id, inst := range f.state.Instances {
+			if inst.AppName == name {
+				delete(f.state.Instances, id)
+			}
+		}
 
 	case OpSetNode:
 		var node Node

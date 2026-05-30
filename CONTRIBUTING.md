@@ -37,6 +37,7 @@ In another terminal, use the CLI against the local gRPC endpoint (default `127.0
 ```bash
 ./bin/kudo apply -f configs/examples/docker-app.yaml
 ./bin/kudo status
+./bin/kudo remove -f configs/examples/docker-app.yaml
 ```
 
 Keep the agent process running in the first terminal for as long as you use `apply`, `status`, `scale`, or `nodes`. Without a config file, the agent uses local dev defaults: state under `~/.kudo/data` and proxy on port `8088` (no sudo required on macOS).

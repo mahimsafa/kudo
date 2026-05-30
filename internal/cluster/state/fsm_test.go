@@ -48,12 +48,20 @@ func TestFSMApplyDeleteApplication(t *testing.T) {
 	cmd := Command{Op: OpSetApplication, Data: mustMarshal(t, app)}
 	fsm.Apply(&raft.Log{Data: mustMarshal(t, cmd)})
 
+	instCmd := Command{Op: OpSetInstance, Data: mustMarshal(t, Instance{
+		ID: "inst-1", AppName: "to-delete", NodeID: "node-1", Status: "running",
+	})}
+	fsm.Apply(&raft.Log{Data: mustMarshal(t, instCmd)})
+
 	delCmd := Command{Op: OpDeleteApplication, Data: mustMarshal(t, "to-delete")}
 	fsm.Apply(&raft.Log{Data: mustMarshal(t, delCmd)})
 
 	_, exists := fsm.GetApplication("to-delete")
 	if exists {
 		t.Error("expected application to be deleted")
+	}
+	if len(fsm.GetInstancesForApp("to-delete")) != 0 {
+		t.Error("expected instances to be deleted with application")
 	}
 }
 
