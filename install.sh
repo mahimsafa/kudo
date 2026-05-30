@@ -37,7 +37,7 @@ Usage:
 Options:
   --system          Install system-wide (/usr/local/bin, systemd system unit)
   --user            Install for current user (~/.local/bin, systemd user unit)
-  --dev             Build from source (clone repo, make build) instead of downloading a release
+  --dev             Build from source (clone to ~/.kudo, make build) instead of downloading a release
   --version VER     Install a specific release version (default: latest; ignored with --dev)
   --uninstall       Remove kudo binary, systemd unit, and optionally data
   -h, --help        Show this help
@@ -94,9 +94,17 @@ resolve_paths() {
         CONFIG_DIR="/etc/kudo"
         SYSTEMD_DIR="/etc/systemd/system"
         SYSTEMD_USER_FLAG=""
+        if [[ "$DEV_MODE" == true ]]; then
+            SOURCE_DIR="${DATA_DIR}/src"
+        fi
     else
         BIN_DIR="$HOME/.local/bin"
-        DATA_DIR="$HOME/.local/share/kudo"
+        if [[ "$DEV_MODE" == true ]]; then
+            SOURCE_DIR="$HOME/.kudo"
+            DATA_DIR="$HOME/.kudo/data"
+        else
+            DATA_DIR="$HOME/.local/share/kudo"
+        fi
         CONFIG_DIR="$HOME/.config/kudo"
         SYSTEMD_DIR="$HOME/.config/systemd/user"
         SYSTEMD_USER_FLAG="--user"
@@ -400,7 +408,10 @@ ensure_dev_prerequisites() {
 # --- Clone repo and build from source ----------------------------------
 build_from_source() {
     local repo_url="https://github.com/${REPO}.git"
-    SOURCE_DIR="${DATA_DIR}/src"
+
+    if [[ -z "${SOURCE_DIR:-}" ]]; then
+        SOURCE_DIR="${DATA_DIR}/src"
+    fi
 
     run_scope mkdir -p "$DATA_DIR"
 

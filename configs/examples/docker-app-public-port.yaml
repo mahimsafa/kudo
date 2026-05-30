@@ -1,0 +1,17 @@
+# Example: app listens on 8080 inside the container; clients reach it on port 80 via the Kudo proxy.
+# Set the agent proxy to listen on 80 (requires permission to bind :80) or use ingress_port / public
+# with local_access and connect to the agent proxy port (8088 in local dev without a config file).
+kind: Application
+name: app-8080
+adapter: docker
+replicas: 1
+spec:
+  image: your-registry/your-app:v1
+  ports:
+    - port: 8080
+      public: 80
+routing:
+  domain: app.example.com
+  path: /
+  ingress_port: 80
+  local_access: true

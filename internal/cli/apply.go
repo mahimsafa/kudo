@@ -44,13 +44,14 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.Apply(ctx, &pb.ApplyRequest{YamlContent: string(data)})
 	if err != nil {
-		return fmt.Errorf("apply failed: %w", err)
+		return fmt.Errorf("apply failed: %w", wrapGRPCError(err))
 	}
 
 	if resp.Success {
 		fmt.Println("Applied successfully:", resp.Message)
-	} else {
-		fmt.Println("Apply failed:", resp.Message)
+		fmt.Println("Wait ~10s for replicas, then run: kudo status <app-name>")
+		fmt.Println("Traffic goes through the Kudo proxy (port 8088 in local dev), not host port 80.")
+		return nil
 	}
-	return nil
+	return fmt.Errorf("apply failed: %s", resp.Message)
 }

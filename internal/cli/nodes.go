@@ -35,7 +35,7 @@ func runNodes(cmd *cobra.Command, args []string) error {
 
 	resp, err := client.ListNodes(ctx, &pb.ListNodesRequest{})
 	if err != nil {
-		return err
+		return wrapGRPCError(err)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

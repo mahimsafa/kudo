@@ -5,9 +5,12 @@ replicas: 2
 spec:
   image: nginx:alpine
   ports:
-    - 80
+    - port: 80
 routing:
   domain: demo.example.com
+  path: /
+  local_access: true   # allows: curl http://127.0.0.1:8088/  (proxy port in local dev)
+  ingress_port: 8088   # must match agent proxy listen port (8088 without /etc/kudo/kudo.yaml)
   algorithm: round-robin
   healthcheck:
     path: /

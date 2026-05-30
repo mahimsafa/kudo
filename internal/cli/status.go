@@ -36,11 +36,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		resp, err := client.GetStatus(ctx, &pb.StatusRequest{AppName: args[0]})
 		if err != nil {
-			return err
+			return wrapGRPCError(err)
 		}
 		fmt.Printf("Application: %s\n", resp.AppName)
 		fmt.Printf("Adapter:     %s\n", resp.Adapter)
 		fmt.Printf("Replicas:    %d/%d running\n", resp.RunningReplicas, resp.DesiredReplicas)
+		if resp.RunningReplicas == 0 {
+			fmt.Println("\nNo running instances yet. Ensure Docker is running, wait ~10s after apply, and check agent logs for deploy errors.")
+		} else {
+			fmt.Println("\nAccess (local dev proxy defaults to port 8088, not 80):")
+			fmt.Println("  curl http://127.0.0.1:8088/")
+			fmt.Println("  curl -H 'Host: <routing.domain>' http://127.0.0.1:8088/")
+		}
 		fmt.Println("\nInstances:")
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "ID\tNODE\tSTATUS\tADDRESS\n")
@@ -55,7 +62,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	} else {
 		resp, err := client.ListApplications(ctx, &pb.ListAppsRequest{})
 		if err != nil {
-			return err
+			return wrapGRPCError(err)
+		}
+		if len(resp.Apps) == 0 {
+			fmt.Println("No applications in cluster state. Run apply while the agent is leader, then wait for reconciliation to deploy instances.")
+			return nil
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "NAME\tADAPTER\tREPLICAS\n")

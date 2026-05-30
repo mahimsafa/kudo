@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -79,4 +80,20 @@ func defaultAgentConfig() *AgentConfig {
 			Level: "info",
 		},
 	}
+}
+
+// LocalDevAgentConfig returns defaults for running the agent without a config file
+// (writable data dir under the user home, non-privileged proxy ports).
+func LocalDevAgentConfig() *AgentConfig {
+	cfg := defaultAgentConfig()
+	// 127.0.0.1 is required for Raft (0.0.0.0 is not advertisable as a cluster address).
+	cfg.Node.BindAddr = "127.0.0.1"
+	if home, err := os.UserHomeDir(); err == nil {
+		cfg.Node.DataDir = filepath.Join(home, ".kudo", "data")
+	} else {
+		cfg.Node.DataDir = ".kudo-data"
+	}
+	cfg.Proxy.HTTPPort = 8088
+	cfg.Proxy.HTTPSPort = 8443
+	return cfg
 }

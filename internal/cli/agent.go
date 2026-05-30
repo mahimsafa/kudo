@@ -80,11 +80,5 @@ func loadOrDefaultConfig() (*config.AgentConfig, error) {
 	if _, err := os.Stat(agentConfigFile); err == nil {
 		return config.LoadAgentConfig(agentConfigFile)
 	}
-	return &config.AgentConfig{
-		Node:    config.NodeConfig{BindAddr: "0.0.0.0", BindPort: 7946, DataDir: "/var/lib/kudo"},
-		Cluster: config.ClusterConfig{},
-		API:     config.APIConfig{GRPCPort: 9090, HTTPPort: 8080},
-		Proxy:   config.ProxyConfig{HTTPPort: 80, HTTPSPort: 443},
-		Log:     config.LogConfig{Level: "info"},
-	}, nil
+	return config.LocalDevAgentConfig(), nil
 }

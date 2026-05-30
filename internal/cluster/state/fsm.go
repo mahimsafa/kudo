@@ -40,6 +40,8 @@ type RoutingConfig struct {
 	Path        string `json:"path,omitempty"`
 	TLS         string `json:"tls,omitempty"`
 	Algorithm   string `json:"algorithm,omitempty"`
+	IngressPort int    `json:"ingress_port,omitempty"`
+	LocalAccess bool   `json:"local_access,omitempty"`
 	HealthCheck string `json:"healthcheck,omitempty"`
 }
 
@@ -102,6 +104,11 @@ func (f *FSM) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("unmarshal app name: %w", err)
 		}
 		delete(f.state.Applications, name)
+		for id, inst := range f.state.Instances {
+			if inst.AppName == name {
+				delete(f.state.Instances, id)
+			}
+		}
 
 	case OpSetNode:
 		var node Node

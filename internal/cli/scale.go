@@ -41,7 +41,7 @@ func runScale(cmd *cobra.Command, args []string) error {
 		Replicas: scaleReplicas,
 	})
 	if err != nil {
-		return err
+		return wrapGRPCError(err)
 	}
 
 	if resp.Success {

@@ -37,7 +37,32 @@ In another terminal, use the CLI against the local gRPC endpoint (default `127.0
 ```bash
 ./bin/kudo apply -f configs/examples/docker-app.yaml
 ./bin/kudo status
+./bin/kudo remove -f configs/examples/docker-app.yaml
 ```
+
+Keep the agent process running in the first terminal for as long as you use `apply`, `status`, `scale`, or `nodes`. Without a config file, the agent uses local dev defaults: state under `~/.kudo/data` and proxy on port `8088` (no sudo required on macOS).
+
+### Troubleshooting
+
+#### `apply` fails with `connection refused` on `127.0.0.1:9090`
+
+`kudo apply` is a **client**; it does not start the API server. This error means nothing is listening on the gRPC port—not a bad YAML path. The file is read before the CLI dials the agent.
+
+1. Start the agent in a **separate** terminal and leave it running:
+
+   ```bash
+   ./bin/kudo agent --bootstrap --name dev-node-1
+   ```
+
+2. Confirm the API is listening:
+
+   ```bash
+   lsof -iTCP:9090 -sTCP:LISTEN
+   ```
+
+3. Run `apply` again in the other terminal.
+
+If the agent exits immediately, read its stderr (common causes: port `7946` already in use, or Raft cannot write `data_dir`). If you have `/etc/kudo/kudo.yaml` from a system install, the agent loads it by default; ensure `api.grpc_port` is `9090`, or pass `--server host:port` on CLI commands.
 
 See [docs/getting-started.md](docs/getting-started.md) for a full cluster walkthrough.
 
@@ -127,7 +152,10 @@ Use [docs/index.md](docs/index.md) to find the canonical documentation home befo
 | Your change affects… | Update this doc |
 |----------------------|-----------------|
 | Install, first cluster, basic commands | [docs/getting-started.md](docs/getting-started.md) |
-| Agent or application YAML fields | [docs/configuration.md](docs/configuration.md) |
+| CLI commands and flags | [docs/cli-usage.md](docs/cli-usage.md) |
+| Application deployment YAML fields | [docs/application-manifest.md](docs/application-manifest.md) |
+| Agent YAML fields | [docs/configuration.md](docs/configuration.md) |
+| Production deploy, troubleshooting, gaps | [docs/deploy-web-application.md](docs/deploy-web-application.md) |
 | Runtime components, data flow, consensus | [docs/architecture.md](docs/architecture.md) |
 | End-to-end app deployment (e.g. Node.js) | [docs/deploy-nodejs-docker.md](docs/deploy-nodejs-docker.md) |
 
