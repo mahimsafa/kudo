@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO="mahimsafa/kudo"
 BINARY_NAME="kudo"
+MIN_GO_VERSION="1.23"
 
 # --- Colors -----------------------------------------------------------
 RED='\033[0;31m'
@@ -80,6 +81,7 @@ detect_platform() {
         *) fatal "Unsupported architecture: $arch. Kudo supports amd64 and arm64." ;;
     esac
 
+    PLATFORM_OS="$os"
     PLATFORM_ARCH="$arch"
 }
 
@@ -124,10 +126,14 @@ prompt_scope() {
 # --- Run command with scope-appropriate privileges ---------------------
 run_scope() {
     if [[ "$INSTALL_SCOPE" == "system" ]]; then
-        sudo "$@"
+        sudo env "PATH=${PATH}" "$@"
     else
         "$@"
     fi
+}
+
+run_root() {
+    sudo env "PATH=${PATH}" "$@"
 }
 
 # --- Fetch helpers (curl preferred, wget fallback) ---------------------
@@ -201,17 +207,188 @@ download_binary() {
 }
 
 # --- Dev install prerequisites -----------------------------------------
-check_dev_prerequisites() {
-    local missing=()
-    has_cmd git  || missing+=("git")
-    has_cmd go   || missing+=("go")
-    has_cmd make || missing+=("make")
+current_go_version() {
+    if ! has_cmd go; then
+        return
+    fi
+    go env GOVERSION 2>/dev/null | sed 's/^go//'
+}
 
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        fatal "Dev install requires: ${missing[*]}. See CONTRIBUTING.md for setup."
+version_ge() {
+    local ver="$1" min="$2"
+    [[ "$(printf '%s\n' "$min" "$ver" | sort -V | head -1)" == "$min" ]]
+}
+
+go_bin_dir() {
+    if [[ "$INSTALL_SCOPE" == "system" ]]; then
+        printf '/usr/local/go/bin'
+    else
+        printf '%s/.local/go/bin' "$HOME"
+    fi
+}
+
+ensure_go_in_path() {
+    local go_bin
+    go_bin="$(go_bin_dir)"
+    if [[ -d "$go_bin" ]] && [[ ":$PATH:" != *":${go_bin}:"* ]]; then
+        export PATH="${go_bin}:${PATH}"
+    fi
+}
+
+install_linux_pkg() {
+    local pkg="$1"
+    if has_cmd apt-get; then
+        run_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+        run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg"
+    elif has_cmd dnf; then
+        run_root dnf install -y "$pkg"
+    elif has_cmd yum; then
+        run_root yum install -y "$pkg"
+    elif has_cmd apk; then
+        run_root apk add --no-cache "$pkg"
+    elif has_cmd pacman; then
+        run_root pacman -Sy --noconfirm "$pkg"
+    elif has_cmd zypper; then
+        run_root zypper install -y "$pkg"
+    else
+        fatal "Cannot install ${pkg} automatically. Install it and retry."
+    fi
+}
+
+install_git() {
+    info "Installing git..."
+    case "$PLATFORM_OS" in
+        Linux) install_linux_pkg git ;;
+        Darwin)
+            if has_cmd brew; then
+                brew install git
+            elif ! xcode-select -p &>/dev/null 2>&1; then
+                warn "Installing Xcode Command Line Tools (includes git)..."
+                xcode-select --install
+                fatal "Complete the Xcode Command Line Tools install, then rerun this script."
+            else
+                fatal "git not found. Install git via Homebrew or Xcode Command Line Tools and retry."
+            fi
+            ;;
+    esac
+    ok "git installed."
+}
+
+install_make() {
+    info "Installing make..."
+    case "$PLATFORM_OS" in
+        Linux)
+            if has_cmd apt-get; then
+                run_root env DEBIAN_FRONTEND=noninteractive apt-get update -qq
+                run_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq build-essential
+            else
+                install_linux_pkg make
+            fi
+            ;;
+        Darwin)
+            if has_cmd make; then
+                return
+            fi
+            if has_cmd brew; then
+                brew install make
+            elif ! xcode-select -p &>/dev/null 2>&1; then
+                warn "Installing Xcode Command Line Tools (includes make)..."
+                xcode-select --install
+                fatal "Complete the Xcode Command Line Tools install, then rerun this script."
+            else
+                fatal "make not found. Install make via Homebrew or Xcode Command Line Tools and retry."
+            fi
+            ;;
+    esac
+    ok "make installed."
+}
+
+install_go_latest() {
+    local latest go_os url tmp_dir go_root
+    info "Fetching latest Go version..."
+    latest="$(http_get "https://go.dev/VERSION?mode=text" | tr -d '\n')"
+    latest="${latest#go}"
+
+    case "$PLATFORM_OS" in
+        Linux)  go_os="linux" ;;
+        Darwin) go_os="darwin" ;;
+        *) fatal "Unsupported OS for Go install: ${PLATFORM_OS}" ;;
+    esac
+
+    url="https://go.dev/dl/go${latest}.${go_os}-${PLATFORM_ARCH}.tar.gz"
+    tmp_dir="$(mktemp -d)"
+
+    info "Installing Go ${latest}..."
+    http_download "$url" "${tmp_dir}/go.tar.gz"
+
+    if [[ "$INSTALL_SCOPE" == "system" ]]; then
+        sudo rm -rf /usr/local/go
+        sudo tar -C /usr/local -xzf "${tmp_dir}/go.tar.gz"
+        go_root="/usr/local/go"
+    else
+        go_root="${HOME}/.local/go"
+        rm -rf "$go_root"
+        mkdir -p "${HOME}/.local"
+        tar -C "${HOME}/.local" -xzf "${tmp_dir}/go.tar.gz"
     fi
 
-    ok "Build tools available (git, go, make)."
+    rm -rf "$tmp_dir"
+    export PATH="${go_root}/bin:${PATH}"
+    ok "Go ${latest} installed to ${go_root}"
+
+    if [[ "$INSTALL_SCOPE" == "user" ]] && [[ ":$PATH:" != *":${go_root}/bin:"* ]]; then
+        warn "${go_root}/bin is not in your PATH."
+        warn "Add it with:  export PATH=\"${go_root}/bin:\$PATH\""
+    fi
+}
+
+ensure_git() {
+    if has_cmd git; then
+        return
+    fi
+    install_git
+}
+
+ensure_make() {
+    if has_cmd make; then
+        return
+    fi
+    install_make
+}
+
+ensure_go() {
+    ensure_go_in_path
+
+    local current=""
+    if has_cmd go; then
+        current="$(current_go_version)"
+    fi
+
+    if [[ -n "$current" ]] && version_ge "$current" "$MIN_GO_VERSION"; then
+        ok "Go ${current} meets minimum (${MIN_GO_VERSION})."
+        return
+    fi
+
+    if [[ -n "$current" ]]; then
+        warn "Go ${current} is below minimum ${MIN_GO_VERSION}; installing latest Go."
+    else
+        info "Go not found; installing latest Go."
+    fi
+
+    install_go_latest
+
+    current="$(current_go_version)"
+    if [[ -z "$current" ]] || ! version_ge "$current" "$MIN_GO_VERSION"; then
+        fatal "Go install failed or version ${current:-unknown} is still below ${MIN_GO_VERSION}."
+    fi
+}
+
+ensure_dev_prerequisites() {
+    ensure_git
+    ensure_make
+    ensure_go
+    ensure_go_in_path
+    ok "Build tools ready (git $(git --version | awk '{print $3}'), go $(current_go_version), make $(make --version | head -1 | awk '{print $3}' | tr -d '\r'))."
 }
 
 # --- Clone repo and build from source ----------------------------------
@@ -274,16 +451,139 @@ create_dirs() {
     ok "Created config dir: ${CONFIG_DIR}"
 }
 
-# --- Check Docker ------------------------------------------------------
-check_docker() {
-    if ! has_cmd docker; then
-        warn "Docker is not installed. Kudo requires Docker for container workloads."
-        warn "Install Docker: https://docs.docker.com/engine/install/"
-    elif ! docker info &>/dev/null; then
-        warn "Docker is installed but the daemon is not running or current user lacks permissions."
+# --- Ensure Docker -----------------------------------------------------
+docker_usable() {
+    docker info &>/dev/null
+}
+
+wait_for_docker() {
+    local attempts="${1:-30}"
+    local i
+
+    for ((i = 1; i <= attempts; i++)); do
+        if docker_usable; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+install_docker_linux() {
+    local tmp_script
+    info "Installing Docker..."
+
+    if has_cmd apk; then
+        run_root apk add --no-cache docker docker-cli-compose
+        if has_cmd rc-update; then
+            run_root rc-update add docker boot 2>/dev/null || true
+        fi
     else
-        ok "Docker is available."
+        tmp_script="$(mktemp)"
+        http_download "https://get.docker.com" "$tmp_script"
+        run_root sh "$tmp_script"
+        rm -f "$tmp_script"
     fi
+
+    if has_cmd systemctl; then
+        run_root systemctl enable --now docker
+    fi
+
+    ok "Docker installed."
+}
+
+install_docker_darwin() {
+    info "Installing Docker Desktop..."
+
+    if has_cmd brew; then
+        if ! brew list --cask docker &>/dev/null 2>&1; then
+            brew install --cask docker
+        fi
+        if ! docker_usable; then
+            info "Starting Docker Desktop..."
+            open -a Docker 2>/dev/null || true
+        fi
+    else
+        fatal "Install Homebrew (https://brew.sh) or Docker Desktop (https://docs.docker.com/desktop/install/mac-install/) and retry."
+    fi
+}
+
+ensure_docker_group() {
+    if [[ "$PLATFORM_OS" != "Linux" ]]; then
+        return
+    fi
+    if docker_usable; then
+        return
+    fi
+    if id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+        return
+    fi
+    if getent group docker &>/dev/null; then
+        info "Adding ${USER} to the docker group..."
+        run_root usermod -aG docker "$USER"
+        warn "Added ${USER} to the docker group. Log out and back in, or run: newgrp docker"
+    fi
+}
+
+ensure_docker_daemon() {
+    if docker_usable; then
+        return
+    fi
+    if ! has_cmd docker; then
+        return
+    fi
+
+    info "Docker is installed but not reachable; trying to start it..."
+    case "$PLATFORM_OS" in
+        Linux)
+            if has_cmd systemctl; then
+                run_root systemctl start docker 2>/dev/null || true
+            fi
+            ;;
+        Darwin)
+            open -a Docker 2>/dev/null || true
+            wait_for_docker 60 || true
+            ;;
+    esac
+}
+
+ensure_docker() {
+    if ! has_cmd docker; then
+        case "$PLATFORM_OS" in
+            Linux)  install_docker_linux ;;
+            Darwin) install_docker_darwin ;;
+            *)      fatal "Cannot install Docker on ${PLATFORM_OS} automatically." ;;
+        esac
+    fi
+
+    ensure_docker_daemon
+
+    if docker_usable; then
+        ok "Docker is available ($(docker --version | cut -d, -f1))."
+        return
+    fi
+
+    ensure_docker_group
+    wait_for_docker 15 || true
+
+    if docker_usable; then
+        ok "Docker is available ($(docker --version | cut -d, -f1))."
+        return
+    fi
+
+    if run_root docker info &>/dev/null; then
+        ok "Docker daemon is running. Log out and back in, or run: newgrp docker"
+        return
+    fi
+
+    case "$PLATFORM_OS" in
+        Darwin)
+            fatal "Docker Desktop is installed but not running. Open Docker Desktop and retry."
+            ;;
+        *)
+            fatal "Docker is required for container workloads but is not running. Start Docker and retry."
+            ;;
+    esac
 }
 
 # --- Install systemd service -------------------------------------------
@@ -451,9 +751,9 @@ main() {
         detect_platform
         prompt_scope
         resolve_paths
-        check_dev_prerequisites
+        ensure_dev_prerequisites
+        ensure_docker
         build_from_source
-        check_docker
         install_binary
         create_dirs
         install_service
@@ -463,7 +763,7 @@ main() {
         prompt_scope
         resolve_paths
         resolve_version
-        check_docker
+        ensure_docker
         download_binary
         install_binary
         create_dirs
