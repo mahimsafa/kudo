@@ -3,8 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/mahimsafa/kudo/internal/config"
@@ -23,12 +21,8 @@ func appConfigToState(app config.AppConfig) state.Application {
 	if app.Spec.Directory != "" {
 		spec["directory"] = app.Spec.Directory
 	}
-	if len(app.Spec.Ports) > 0 {
-		parts := make([]string, len(app.Spec.Ports))
-		for i, p := range app.Spec.Ports {
-			parts[i] = strconv.Itoa(p)
-		}
-		spec["ports"] = strings.Join(parts, ",")
+	if raw := portMappingsToSpec(app.Spec.Ports); raw != "" {
+		spec["port_mappings"] = raw
 	}
 	if len(app.Spec.Env) > 0 {
 		if b, err := json.Marshal(app.Spec.Env); err == nil {
@@ -37,10 +31,12 @@ func appConfigToState(app config.AppConfig) state.Application {
 	}
 
 	routing := state.RoutingConfig{
-		Domain:    app.Routing.Domain,
-		Path:      app.Routing.Path,
-		TLS:       app.Routing.TLS,
-		Algorithm: app.Routing.Algorithm,
+		Domain:      app.Routing.Domain,
+		Path:        app.Routing.Path,
+		TLS:         app.Routing.TLS,
+		Algorithm:   app.Routing.Algorithm,
+		IngressPort: ingressPortFromPorts(app.Spec.Ports, app.Routing),
+		LocalAccess: app.Routing.LocalAccess,
 	}
 	if app.Routing.HealthCheck.Path != "" {
 		routing.HealthCheck = app.Routing.HealthCheck.Path
@@ -84,31 +80,8 @@ func applyYAMLToRaft(raft *raftlayer.RaftNode, yamlContent string, timeout time.
 	return len(apps), nil
 }
 
-func ParsePortsFromSpec(spec map[string]string) []int {
-	return parsePortsFromSpec(spec)
-}
-
 func ParseEnvFromSpec(spec map[string]string) map[string]string {
 	return parseEnvFromSpec(spec)
-}
-
-func parsePortsFromSpec(spec map[string]string) []int {
-	raw, ok := spec["ports"]
-	if !ok || raw == "" {
-		return nil
-	}
-	var ports []int
-	for _, part := range strings.Split(raw, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		p, err := strconv.Atoi(part)
-		if err == nil {
-			ports = append(ports, p)
-		}
-	}
-	return ports
 }
 
 func parseEnvFromSpec(spec map[string]string) map[string]string {

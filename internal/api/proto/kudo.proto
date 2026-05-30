@@ -24,6 +24,8 @@ message ApplyResponse {
 
 message RemoveRequest {
     string yaml_content = 1;
+    // When true, continue removing cluster state and routes if workloads are already gone.
+    bool force_missing_workloads = 2;
 }
 
 message DependencyInfo {
@@ -37,6 +39,9 @@ message RemoveResponse {
     bool success = 1;
     string message = 2;
     repeated DependencyInfo blockers = 3;
+    repeated string warnings = 4;
+    // Set when workloads are missing; re-run with force_missing_workloads after user confirms.
+    bool confirm_required = 5;
 }
 
 message StatusRequest {

@@ -7,4 +7,5 @@ type Runtime struct {
 	LocalNodeID  string
 	StopInstance func(ctx context.Context, adapter, instanceID string) error
 	RemoveRoute  func(domain, path string)
+	SyncProxy    func()
 }

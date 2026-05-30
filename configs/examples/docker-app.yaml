@@ -5,9 +5,11 @@ replicas: 2
 spec:
   image: nginx:alpine
   ports:
-    - 80
+    - port: 80
 routing:
   domain: demo.example.com
+  path: /
+  local_access: true
   algorithm: round-robin
   healthcheck:
     path: /

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -24,26 +25,45 @@ func NewProxy() *Proxy {
 	}
 }
 
+// NormalizePath ensures paths are consistent route keys.
+func NormalizePath(path string) string {
+	if path == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(path, "/") {
+		return "/" + path
+	}
+	return path
+}
+
+func routeKey(host, path string) string {
+	return host + NormalizePath(path)
+}
+
 func (p *Proxy) AddRoute(domain, path string, backends []string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	var urls []*url.URL
 	for _, b := range backends {
-		u, err := url.Parse(b)
+		addr := b
+		if !strings.Contains(addr, "://") {
+			addr = "http://" + addr
+		}
+		u, err := url.Parse(addr)
 		if err == nil {
 			urls = append(urls, u)
 		}
 	}
 
-	key := domain + path
+	key := routeKey(domain, path)
 	p.routes[key] = &route{backends: urls}
 }
 
 func (p *Proxy) RemoveRoute(domain, path string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	delete(p.routes, domain+path)
+	delete(p.routes, routeKey(domain, path))
 }
 
 func (p *Proxy) UpdateBackends(domain, path string, backends []string) {
@@ -51,9 +71,14 @@ func (p *Proxy) UpdateBackends(domain, path string, backends []string) {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	host := r.Host
+	if h, _, ok := strings.Cut(host, ":"); ok {
+		host = h
+	}
+	path := NormalizePath(r.URL.Path)
+
 	p.mu.RLock()
-	key := r.Host + "/"
-	rt, ok := p.routes[key]
+	rt, ok := p.routes[routeKey(host, path)]
 	p.mu.RUnlock()
 
 	if !ok {

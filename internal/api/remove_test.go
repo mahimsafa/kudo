@@ -1,17 +1,16 @@
 package api
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/raft"
 
 	"github.com/mahimsafa/kudo/internal/cluster/state"
+	"github.com/mahimsafa/kudo/internal/executor"
 )
-
-func applyApp(fsm *state.FSM, app state.Application) {
-	cmd, _ := state.MarshalCommand(state.OpSetApplication, app)
-	fsm.Apply(&raft.Log{Data: cmd})
-}
 
 func TestFindRemoveBlockers_sharedRouting(t *testing.T) {
 	fsm := state.NewFSM()
@@ -30,7 +29,8 @@ func TestFindRemoveBlockers_sharedRouting(t *testing.T) {
 	}
 
 	for _, app := range []state.Application{web, apiApp, shared} {
-		applyApp(fsm, app)
+		cmd, _ := state.MarshalCommand(state.OpSetApplication, app)
+		fsm.Apply(&raft.Log{Data: cmd})
 	}
 
 	toRemove := map[string]state.Application{"web": web}
@@ -48,11 +48,33 @@ func TestFindRemoveBlockers_sharedRouting(t *testing.T) {
 	}
 }
 
-func TestRouteKey(t *testing.T) {
-	key, ok := RouteKey(state.Application{
-		Routing: state.RoutingConfig{Domain: "demo.example.com"},
-	})
-	if !ok || key != "demo.example.com/" {
-		t.Fatalf("got %q ok=%v", key, ok)
+func TestStopInstancesForApp_missingWorkloadWarning(t *testing.T) {
+	runtime := &Runtime{
+		LocalNodeID: "node-1",
+		StopInstance: func(ctx context.Context, adapter, instanceID string) error {
+			return fmt.Errorf("%w: container gone", executor.ErrWorkloadNotFound)
+		},
+	}
+	app := state.Application{Name: "web", Adapter: "docker"}
+	instances := []state.Instance{
+		{ID: "inst-1", AppName: "web", NodeID: "node-1", Status: "running"},
+	}
+
+	warnings, err := stopInstancesForApp(context.Background(), runtime, app, instances)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %v", warnings)
+	}
+}
+
+func TestIsMissingWorkload(t *testing.T) {
+	err := fmt.Errorf("wrap: %w", executor.ErrWorkloadNotFound)
+	if !isMissingWorkload(err) {
+		t.Fatal("expected missing workload")
+	}
+	if isMissingWorkload(errors.New("other")) {
+		t.Fatal("unexpected")
 	}
 }

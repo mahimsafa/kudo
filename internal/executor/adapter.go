@@ -2,12 +2,19 @@ package executor
 
 import "context"
 
+// PortMapping binds a container port to optional host and ingress ports.
+type PortMapping struct {
+	Container int
+	Host      int
+	Public    int
+}
+
 type DeployRequest struct {
 	InstanceID string
 	AppName    string
 	Spec       map[string]string
 	Env        map[string]string
-	Ports      []int
+	Ports      []PortMapping
 }
 
 type DeployResponse struct {

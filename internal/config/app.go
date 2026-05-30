@@ -23,7 +23,7 @@ type AppSpec struct {
 	Entrypoint string            `yaml:"entrypoint,omitempty"`
 	Directory  string            `yaml:"directory,omitempty"`
 	Env        map[string]string `yaml:"env,omitempty"`
-	Ports      []int             `yaml:"ports,omitempty"`
+	Ports      PortList          `yaml:"ports,omitempty"`
 }
 
 type AppRouting struct {
@@ -31,6 +31,10 @@ type AppRouting struct {
 	Path        string         `yaml:"path,omitempty"`
 	TLS         string         `yaml:"tls,omitempty"`
 	Algorithm   string         `yaml:"algorithm,omitempty"`
+	// IngressPort is the TCP port the Kudo L7 proxy listens on for this app (e.g. 80).
+	IngressPort int `yaml:"ingress_port,omitempty"`
+	// LocalAccess also registers the route for localhost and 127.0.0.1 (dev-friendly).
+	LocalAccess bool           `yaml:"local_access,omitempty"`
 	HealthCheck HealthCheckCfg `yaml:"healthcheck,omitempty"`
 }
 

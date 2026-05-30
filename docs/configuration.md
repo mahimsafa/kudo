@@ -56,10 +56,16 @@ spec:
     PORT: "8080"
   ports:
     - 8080
+    # Or map container, host, and ingress ports explicitly:
+    # - port: 8080        # container port your app listens on
+    #   public: 80       # port clients use on the Kudo L7 proxy (e.g. internet-facing 80)
+    #   host: 0          # optional fixed Docker host port (0 or omit = ephemeral)
 
 routing:
   domain: api.example.com
   path: /
+  ingress_port: 80       # optional; should match agent proxy.http_port for that listen port
+  local_access: true     # also route localhost / 127.0.0.1 (useful for local dev)
   tls: auto                       # auto | manual | off
   algorithm: round-robin          # round-robin | least-connections
   healthcheck:

@@ -13,10 +13,10 @@ func TestAppConfigToState(t *testing.T) {
 		Replicas: 2,
 		Spec: config.AppSpec{
 			Image: "nginx:alpine",
-			Ports: []int{80},
+			Ports: config.PortList{{Port: 80}},
 			Env:   map[string]string{"FOO": "bar"},
 		},
-		Routing: config.AppRouting{Domain: "demo.example.com"},
+		Routing: config.AppRouting{Domain: "demo.example.com", LocalAccess: true},
 	})
 
 	if app.Name != "nginx-demo" {
@@ -25,9 +25,12 @@ func TestAppConfigToState(t *testing.T) {
 	if app.Spec["image"] != "nginx:alpine" {
 		t.Fatalf("image spec: got %q", app.Spec["image"])
 	}
-	ports := ParsePortsFromSpec(app.Spec)
-	if len(ports) != 1 || ports[0] != 80 {
-		t.Fatalf("ports: got %v", ports)
+	mappings := ParsePortMappingsFromSpec(app.Spec)
+	if len(mappings) != 1 || mappings[0].Container != 80 {
+		t.Fatalf("ports: got %v", mappings)
+	}
+	if !app.Routing.LocalAccess {
+		t.Fatal("expected local_access")
 	}
 	env := ParseEnvFromSpec(app.Spec)
 	if env["FOO"] != "bar" {

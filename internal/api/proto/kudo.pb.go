@@ -118,10 +118,12 @@ func (x *ApplyResponse) GetMessage() string {
 }
 
 type RemoveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	YamlContent   string                 `protobuf:"bytes,1,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	YamlContent string                 `protobuf:"bytes,1,opt,name=yaml_content,json=yamlContent,proto3" json:"yaml_content,omitempty"`
+	// When true, continue removing cluster state and routes if workloads are already gone.
+	ForceMissingWorkloads bool `protobuf:"varint,2,opt,name=force_missing_workloads,json=forceMissingWorkloads,proto3" json:"force_missing_workloads,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *RemoveRequest) Reset() {
@@ -159,6 +161,13 @@ func (x *RemoveRequest) GetYamlContent() string {
 		return x.YamlContent
 	}
 	return ""
+}
+
+func (x *RemoveRequest) GetForceMissingWorkloads() bool {
+	if x != nil {
+		return x.ForceMissingWorkloads
+	}
+	return false
 }
 
 type DependencyInfo struct {
@@ -230,12 +239,15 @@ func (x *DependencyInfo) GetSharedResource() string {
 }
 
 type RemoveResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Blockers      []*DependencyInfo      `protobuf:"bytes,3,rep,name=blockers,proto3" json:"blockers,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Success  bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message  string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Blockers []*DependencyInfo      `protobuf:"bytes,3,rep,name=blockers,proto3" json:"blockers,omitempty"`
+	Warnings []string               `protobuf:"bytes,4,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	// Set when workloads are missing; re-run with force_missing_workloads after user confirms.
+	ConfirmRequired bool `protobuf:"varint,5,opt,name=confirm_required,json=confirmRequired,proto3" json:"confirm_required,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *RemoveResponse) Reset() {
@@ -287,6 +299,20 @@ func (x *RemoveResponse) GetBlockers() []*DependencyInfo {
 		return x.Blockers
 	}
 	return nil
+}
+
+func (x *RemoveResponse) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
+	}
+	return nil
+}
+
+func (x *RemoveResponse) GetConfirmRequired() bool {
+	if x != nil {
+		return x.ConfirmRequired
+	}
+	return false
 }
 
 type StatusRequest struct {
@@ -886,18 +912,21 @@ const file_internal_api_proto_kudo_proto_rawDesc = "" +
 	"\fyaml_content\x18\x01 \x01(\tR\vyamlContent\"C\n" +
 	"\rApplyResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"2\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"j\n" +
 	"\rRemoveRequest\x12!\n" +
-	"\fyaml_content\x18\x01 \x01(\tR\vyamlContent\"\x91\x01\n" +
+	"\fyaml_content\x18\x01 \x01(\tR\vyamlContent\x126\n" +
+	"\x17force_missing_workloads\x18\x02 \x01(\bR\x15forceMissingWorkloads\"\x91\x01\n" +
 	"\x0eDependencyInfo\x12\x19\n" +
 	"\bapp_name\x18\x01 \x01(\tR\aappName\x12#\n" +
 	"\rdependent_app\x18\x02 \x01(\tR\fdependentApp\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12'\n" +
-	"\x0fshared_resource\x18\x04 \x01(\tR\x0esharedResource\"v\n" +
+	"\x0fshared_resource\x18\x04 \x01(\tR\x0esharedResource\"\xbd\x01\n" +
 	"\x0eRemoveResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x120\n" +
-	"\bblockers\x18\x03 \x03(\v2\x14.kudo.DependencyInfoR\bblockers\"*\n" +
+	"\bblockers\x18\x03 \x03(\v2\x14.kudo.DependencyInfoR\bblockers\x12\x1a\n" +
+	"\bwarnings\x18\x04 \x03(\tR\bwarnings\x12)\n" +
+	"\x10confirm_required\x18\x05 \x01(\bR\x0fconfirmRequired\"*\n" +
 	"\rStatusRequest\x12\x19\n" +
 	"\bapp_name\x18\x01 \x01(\tR\aappName\"\xcd\x01\n" +
 	"\x0eStatusResponse\x12\x19\n" +

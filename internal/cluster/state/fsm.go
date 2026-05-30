@@ -40,6 +40,8 @@ type RoutingConfig struct {
 	Path        string `json:"path,omitempty"`
 	TLS         string `json:"tls,omitempty"`
 	Algorithm   string `json:"algorithm,omitempty"`
+	IngressPort int    `json:"ingress_port,omitempty"`
+	LocalAccess bool   `json:"local_access,omitempty"`
 	HealthCheck string `json:"healthcheck,omitempty"`
 }
 

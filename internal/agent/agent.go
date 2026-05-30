@@ -100,6 +100,7 @@ func (a *Agent) Start(ctx context.Context) error {
 	reconcileLoop := reconciler.NewReconcileLoop(a.raft, a.logger, 10*time.Second, a.handleReconcileAction)
 	go reconcileLoop.Start(runCtx)
 	go a.registerLocalNodeWhenLeader(runCtx)
+	go a.proxySyncLoop(runCtx)
 
 	a.logger.Info("kudo agent started successfully",
 		zap.Int("gossip_members", a.gossip.NumMembers()),
@@ -199,12 +200,17 @@ func (a *Agent) deployInstance(action reconciler.Action) error {
 		return err
 	}
 
+	portMappings := api.ParsePortMappingsFromSpec(app.Spec)
+	if len(portMappings) == 0 {
+		return fmt.Errorf("application %q has no port mappings", action.AppName)
+	}
+
 	resp, err := a.executor.Deploy(context.Background(), action.Adapter, executor.DeployRequest{
 		InstanceID: instanceID,
 		AppName:    action.AppName,
 		Spec:       app.Spec,
 		Env:        api.ParseEnvFromSpec(app.Spec),
-		Ports:      api.ParsePortsFromSpec(app.Spec),
+		Ports:      portMappings,
 	})
 	if err != nil {
 		return err
@@ -221,7 +227,25 @@ func (a *Agent) deployInstance(action reconciler.Action) error {
 	if err != nil {
 		return err
 	}
-	return a.raft.Apply(data, 5*time.Second)
+	if err := a.raft.Apply(data, 5*time.Second); err != nil {
+		return err
+	}
+	a.syncProxyRoutes()
+	a.logIngressHint(app)
+	return nil
+}
+
+func (a *Agent) proxySyncLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			a.syncProxyRoutes()
+		}
+	}
 }
 
 func newInstanceID() (string, error) {
@@ -269,6 +293,9 @@ func (a *Agent) apiRuntime() *api.Runtime {
 			if a.proxy != nil {
 				a.proxy.RemoveRoute(domain, path)
 			}
+		},
+		SyncProxy: func() {
+			a.syncProxyRoutes()
 		},
 	}
 }

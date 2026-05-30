@@ -88,7 +88,7 @@ func (s *Server) Remove(ctx context.Context, req *pb.RemoveRequest) (*pb.RemoveR
 		}, nil
 	}
 
-	return removeYAMLFromRaft(ctx, s.raft, s.runtime, req.GetYamlContent(), 10*time.Second)
+	return removeYAMLFromRaft(ctx, s.raft, s.runtime, req.GetYamlContent(), req.GetForceMissingWorkloads(), 10*time.Second)
 }
 
 func (s *Server) GetStatus(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {

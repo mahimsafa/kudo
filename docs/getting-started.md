@@ -103,6 +103,8 @@ kudo remove -f my-app.yaml
 
 Removal is **all-or-nothing**: if another application still uses the same `routing.domain` + `routing.path`, nothing is removed and the CLI prints which app blocks teardown. Include every app that shares that route in the same file (for example both documents in a multi-app manifest) to remove them together.
 
+If a container was deleted manually, `kudo remove` prints warnings and asks for confirmation before removing cluster state and routes. Pass `-y` to continue without prompting.
+
 ## Add a Second Node
 
 On the new server:
@@ -119,7 +121,21 @@ kudo nodes
 
 ## Verify Load Balancing
 
-Point `demo.example.com` at any cluster node's IP on port 80. The built-in L7 proxy round-robins requests across healthy backend instances.
+The Kudo agent runs an L7 reverse proxy (port **8088** in local dev without a config file, or **80** when configured). It forwards to each replica's Docker-published address; replicas do **not** all bind host port 80 directly.
+
+After `apply`, check agent logs for `application reachable via L7 proxy` URLs, or use:
+
+```bash
+# With local_access: true in routing (see configs/examples/docker-app.yaml)
+curl -v http://127.0.0.1:8088/
+
+# Or send the routing domain as Host
+curl -v -H 'Host: demo.example.com' http://127.0.0.1:8088/
+```
+
+To expose an app on container port **8080** at public port **80**, see `configs/examples/docker-app-public-port.yaml` and set the agent `proxy.http_port` to `80` (requires permission to bind port 80).
+
+Point `demo.example.com` at any cluster node's IP on the proxy port. The proxy round-robins across healthy backend instances.
 
 ## Next Steps
 

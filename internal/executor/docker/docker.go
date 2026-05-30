@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/docker/docker/api/types"
@@ -38,6 +39,9 @@ func (d *DockerAdapter) Deploy(ctx context.Context, req executor.DeployRequest) 
 	if imageName == "" {
 		return nil, fmt.Errorf("docker adapter requires 'image' in spec")
 	}
+	if len(req.Ports) == 0 {
+		return nil, fmt.Errorf("docker adapter requires at least one port mapping")
+	}
 
 	d.logger.Info("pulling image", zap.String("image", imageName))
 	reader, err := d.client.ImagePull(ctx, imageName, types.ImagePullOptions{})
@@ -49,10 +53,14 @@ func (d *DockerAdapter) Deploy(ctx context.Context, req executor.DeployRequest) 
 
 	exposedPorts := nat.PortSet{}
 	portBindings := nat.PortMap{}
-	for _, port := range req.Ports {
-		p := nat.Port(fmt.Sprintf("%d/tcp", port))
+	for _, mapping := range req.Ports {
+		p := nat.Port(fmt.Sprintf("%d/tcp", mapping.Container))
 		exposedPorts[p] = struct{}{}
-		portBindings[p] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: ""}}
+		hostPort := ""
+		if mapping.Host > 0 {
+			hostPort = strconv.Itoa(mapping.Host)
+		}
+		portBindings[p] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: hostPort}}
 	}
 
 	var envList []string
@@ -65,6 +73,7 @@ func (d *DockerAdapter) Deploy(ctx context.Context, req executor.DeployRequest) 
 		instanceSuffix = instanceSuffix[:8]
 	}
 	containerName := fmt.Sprintf("kudo-%s-%s", req.AppName, instanceSuffix)
+	primaryPort := nat.Port(fmt.Sprintf("%d/tcp", req.Ports[0].Container))
 
 	resp, err := d.client.ContainerCreate(ctx,
 		&container.Config{
@@ -97,13 +106,7 @@ func (d *DockerAdapter) Deploy(ctx context.Context, req executor.DeployRequest) 
 		return nil, fmt.Errorf("inspecting container: %w", err)
 	}
 
-	var address string
-	for _, bindings := range inspect.NetworkSettings.Ports {
-		if len(bindings) > 0 {
-			address = fmt.Sprintf("127.0.0.1:%s", bindings[0].HostPort)
-			break
-		}
-	}
+	address := bindingAddress(inspect.NetworkSettings.Ports, primaryPort)
 
 	d.logger.Info("container started",
 		zap.String("id", resp.ID[:12]),
@@ -115,6 +118,18 @@ func (d *DockerAdapter) Deploy(ctx context.Context, req executor.DeployRequest) 
 		Address: address,
 		Status:  "running",
 	}, nil
+}
+
+func bindingAddress(ports nat.PortMap, primary nat.Port) string {
+	if bindings, ok := ports[primary]; ok && len(bindings) > 0 && bindings[0].HostPort != "" {
+		return fmt.Sprintf("127.0.0.1:%s", bindings[0].HostPort)
+	}
+	for _, bindings := range ports {
+		if len(bindings) > 0 && bindings[0].HostPort != "" {
+			return fmt.Sprintf("127.0.0.1:%s", bindings[0].HostPort)
+		}
+	}
+	return ""
 }
 
 func (d *DockerAdapter) Stop(ctx context.Context, req executor.StopRequest) error {
@@ -136,7 +151,7 @@ func (d *DockerAdapter) Stop(ctx context.Context, req executor.StopRequest) erro
 		}
 	}
 
-	return fmt.Errorf("container for instance %s not found", req.InstanceID)
+	return fmt.Errorf("%w: container for instance %s", executor.ErrWorkloadNotFound, req.InstanceID)
 }
 
 func (d *DockerAdapter) Status(ctx context.Context, instanceID string) (*executor.StatusResponse, error) {

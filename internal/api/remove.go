@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,13 +11,14 @@ import (
 	"github.com/mahimsafa/kudo/internal/config"
 	raftlayer "github.com/mahimsafa/kudo/internal/cluster/raft"
 	"github.com/mahimsafa/kudo/internal/cluster/state"
+	"github.com/mahimsafa/kudo/internal/executor"
 )
 
 type removeBlocker struct {
-	AppName         string
-	DependentApp    string
-	Reason          string
-	SharedResource  string
+	AppName        string
+	DependentApp   string
+	Reason         string
+	SharedResource string
 }
 
 func findRemoveBlockers(fsm *state.FSM, toRemove map[string]state.Application) []removeBlocker {
@@ -62,7 +64,30 @@ func blockersToProto(blockers []removeBlocker) []*pb.DependencyInfo {
 	return out
 }
 
-func removeYAMLFromRaft(ctx context.Context, raft *raftlayer.RaftNode, runtime *Runtime, yamlContent string, timeout time.Duration) (*pb.RemoveResponse, error) {
+func isMissingWorkload(err error) bool {
+	return errors.Is(err, executor.ErrWorkloadNotFound)
+}
+
+func stopInstancesForApp(ctx context.Context, runtime *Runtime, app state.Application, instances []state.Instance) (warnings []string, err error) {
+	for _, inst := range instances {
+		if runtime == nil || runtime.StopInstance == nil || inst.NodeID != runtime.LocalNodeID {
+			continue
+		}
+		if err := runtime.StopInstance(ctx, app.Adapter, inst.ID); err != nil {
+			if isMissingWorkload(err) {
+				warnings = append(warnings, fmt.Sprintf(
+					"%q instance %s on node %q: container/workload not found (may have been removed manually)",
+					app.Name, inst.ID, inst.NodeID,
+				))
+				continue
+			}
+			return warnings, fmt.Errorf("stopping instance %s for %q: %w", inst.ID, app.Name, err)
+		}
+	}
+	return warnings, nil
+}
+
+func removeYAMLFromRaft(ctx context.Context, raft *raftlayer.RaftNode, runtime *Runtime, yamlContent string, forceMissing bool, timeout time.Duration) (*pb.RemoveResponse, error) {
 	appCfgs, err := config.ParseAppConfigs([]byte(yamlContent))
 	if err != nil {
 		return &pb.RemoveResponse{Success: false, Message: fmt.Sprintf("parsing config: %v", err)}, nil
@@ -94,13 +119,6 @@ func removeYAMLFromRaft(ctx context.Context, raft *raftlayer.RaftNode, runtime *
 
 	blockers := findRemoveBlockers(fsm, toRemove)
 	if len(blockers) > 0 {
-		var lines []string
-		for _, b := range blockers {
-			lines = append(lines, fmt.Sprintf(
-				"cannot remove %q: %s (blocked by %q, shared %s)",
-				b.AppName, b.Reason, b.DependentApp, b.SharedResource,
-			))
-		}
 		return &pb.RemoveResponse{
 			Success:  false,
 			Message:  "remove blocked by dependencies; no resources were changed",
@@ -108,20 +126,27 @@ func removeYAMLFromRaft(ctx context.Context, raft *raftlayer.RaftNode, runtime *
 		}, nil
 	}
 
-	var removed []string
+	var allWarnings []string
 	for name, app := range toRemove {
 		instances := fsm.GetInstancesForApp(name)
-		for _, inst := range instances {
-			if runtime != nil && runtime.StopInstance != nil && inst.NodeID == runtime.LocalNodeID {
-				if err := runtime.StopInstance(ctx, app.Adapter, inst.ID); err != nil {
-					return &pb.RemoveResponse{
-						Success: false,
-						Message: fmt.Sprintf("stopping instance %s for %q: %v", inst.ID, name, err),
-					}, nil
-				}
-			}
+		warnings, err := stopInstancesForApp(ctx, runtime, app, instances)
+		if err != nil {
+			return &pb.RemoveResponse{Success: false, Message: err.Error()}, nil
 		}
+		allWarnings = append(allWarnings, warnings...)
+	}
 
+	if len(allWarnings) > 0 && !forceMissing {
+		return &pb.RemoveResponse{
+			Success:         false,
+			ConfirmRequired: true,
+			Warnings:        allWarnings,
+			Message:         "some workloads are already gone; confirm to remove cluster state, routes, and remaining resources",
+		}, nil
+	}
+
+	var removed []string
+	for name, app := range toRemove {
 		if runtime != nil && runtime.RemoveRoute != nil {
 			if _, ok := RouteKey(app); ok {
 				path := app.Routing.Path
@@ -142,9 +167,17 @@ func removeYAMLFromRaft(ctx context.Context, raft *raftlayer.RaftNode, runtime *
 		removed = append(removed, name)
 	}
 
+	if runtime != nil && runtime.SyncProxy != nil {
+		runtime.SyncProxy()
+	}
+
 	msg := fmt.Sprintf("removed %d application(s): %s", len(removed), strings.Join(removed, ", "))
 	if len(notFound) > 0 {
 		msg += fmt.Sprintf(" (not in cluster: %s)", strings.Join(notFound, ", "))
 	}
-	return &pb.RemoveResponse{Success: true, Message: msg}, nil
+	return &pb.RemoveResponse{
+		Success:  true,
+		Message:  msg,
+		Warnings: allWarnings,
+	}, nil
 }
