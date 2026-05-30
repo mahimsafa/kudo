@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
 	"time"
@@ -52,9 +51,28 @@ func (s *Server) Stop() {
 func (s *Server) Apply(ctx context.Context, req *pb.ApplyRequest) (*pb.ApplyResponse, error) {
 	s.logger.Info("apply request received")
 
+	if !s.raft.IsLeader() {
+		return &pb.ApplyResponse{
+			Success: false,
+			Message: "not cluster leader; retry apply once the agent has finished electing a leader",
+		}, nil
+	}
+
+	n, err := applyYAMLToRaft(s.raft, req.GetYamlContent(), 10*time.Second)
+	if err != nil {
+		return &pb.ApplyResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
+	msg := fmt.Sprintf("applied %d application(s)", n)
+	if n == 1 {
+		msg = "applied 1 application"
+	}
 	return &pb.ApplyResponse{
 		Success: true,
-		Message: "applied successfully",
+		Message: msg,
 	}, nil
 }
 
@@ -134,11 +152,10 @@ func (s *Server) ScaleApplication(ctx context.Context, req *pb.ScaleRequest) (*p
 
 	app.Replicas = int(req.Replicas)
 
-	cmd := state.Command{
-		Op:   state.OpSetApplication,
-		Data: mustJSON(app),
+	data, err := state.MarshalCommand(state.OpSetApplication, app)
+	if err != nil {
+		return nil, fmt.Errorf("encoding scale command: %w", err)
 	}
-	data, _ := json.Marshal(cmd)
 
 	if err := s.raft.Apply(data, 5*time.Second); err != nil {
 		return nil, fmt.Errorf("applying scale: %w", err)
@@ -148,9 +165,4 @@ func (s *Server) ScaleApplication(ctx context.Context, req *pb.ScaleRequest) (*p
 		Success: true,
 		Message: fmt.Sprintf("scaled %s to %d replicas", req.AppName, req.Replicas),
 	}, nil
-}
-
-func mustJSON(v interface{}) json.RawMessage {
-	data, _ := json.Marshal(v)
-	return data
 }

@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -12,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/mahimsafa/kudo/internal/api"
+	"github.com/mahimsafa/kudo/internal/cluster/state"
 	"github.com/mahimsafa/kudo/internal/cluster/gossip"
 	raftlayer "github.com/mahimsafa/kudo/internal/cluster/raft"
 	"github.com/mahimsafa/kudo/internal/config"
@@ -96,6 +99,7 @@ func (a *Agent) Start(ctx context.Context) error {
 
 	reconcileLoop := reconciler.NewReconcileLoop(a.raft, a.logger, 10*time.Second, a.handleReconcileAction)
 	go reconcileLoop.Start(runCtx)
+	go a.registerLocalNodeWhenLeader(runCtx)
 
 	a.logger.Info("kudo agent started successfully",
 		zap.Int("gossip_members", a.gossip.NumMembers()),
@@ -107,21 +111,125 @@ func (a *Agent) Start(ctx context.Context) error {
 	return nil
 }
 
-func (a *Agent) handleReconcileAction(action reconciler.Action) error {
-	switch action.Type {
-	case reconciler.ActionDeploy:
-		a.logger.Info("deploy action",
-			zap.String("app", action.AppName),
-			zap.String("node", action.NodeID),
-		)
-	case reconciler.ActionStop:
-		if a.executor != nil {
-			return a.executor.Stop(context.Background(), action.Adapter, executor.StopRequest{
-				InstanceID: action.InstanceID,
-			})
+func (a *Agent) registerLocalNodeWhenLeader(ctx context.Context) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !a.raft.IsLeader() {
+				continue
+			}
+			if err := a.registerLocalNode(); err != nil {
+				a.logger.Warn("registering local node", zap.Error(err))
+				continue
+			}
+			return
 		}
 	}
+}
+
+func (a *Agent) registerLocalNode() error {
+	addrHost := a.config.Node.BindAddr
+	if a.config.Node.AdvertiseAddr != "" {
+		addrHost = a.config.Node.AdvertiseAddr
+	}
+	node := state.Node{
+		ID:      a.config.Node.Name,
+		Name:    a.config.Node.Name,
+		Address: fmt.Sprintf("%s:%d", addrHost, a.config.API.GRPCPort),
+		Status:  "healthy",
+	}
+	if _, ok := a.raft.FSM().GetNode(node.ID); ok {
+		return nil
+	}
+	data, err := state.MarshalCommand(state.OpSetNode, node)
+	if err != nil {
+		return err
+	}
+	return a.raft.Apply(data, 5*time.Second)
+}
+
+func (a *Agent) handleReconcileAction(action reconciler.Action) error {
+	if !a.raft.IsLeader() {
+		return nil
+	}
+
+	switch action.Type {
+	case reconciler.ActionDeploy:
+		if action.NodeID != a.config.Node.Name {
+			return nil
+		}
+		return a.deployInstance(action)
+	case reconciler.ActionStop:
+		if action.NodeID != a.config.Node.Name {
+			return nil
+		}
+		if a.executor != nil {
+			if err := a.executor.Stop(context.Background(), action.Adapter, executor.StopRequest{
+				InstanceID: action.InstanceID,
+			}); err != nil {
+				return err
+			}
+		}
+		data, err := state.MarshalCommand(state.OpDeleteInstance, action.InstanceID)
+		if err != nil {
+			return err
+		}
+		return a.raft.Apply(data, 5*time.Second)
+	}
 	return nil
+}
+
+func (a *Agent) deployInstance(action reconciler.Action) error {
+	if a.executor == nil {
+		return fmt.Errorf("executor not available")
+	}
+
+	app, ok := a.raft.FSM().GetApplication(action.AppName)
+	if !ok {
+		return fmt.Errorf("application %q not found", action.AppName)
+	}
+
+	instanceID, err := newInstanceID()
+	if err != nil {
+		return err
+	}
+
+	resp, err := a.executor.Deploy(context.Background(), action.Adapter, executor.DeployRequest{
+		InstanceID: instanceID,
+		AppName:    action.AppName,
+		Spec:       app.Spec,
+		Env:        api.ParseEnvFromSpec(app.Spec),
+		Ports:      api.ParsePortsFromSpec(app.Spec),
+	})
+	if err != nil {
+		return err
+	}
+
+	inst := state.Instance{
+		ID:      instanceID,
+		AppName: action.AppName,
+		NodeID:  action.NodeID,
+		Status:  resp.Status,
+		Address: resp.Address,
+	}
+	data, err := state.MarshalCommand(state.OpSetInstance, inst)
+	if err != nil {
+		return err
+	}
+	return a.raft.Apply(data, 5*time.Second)
+}
+
+func newInstanceID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generating instance id: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (a *Agent) WaitForShutdown() {

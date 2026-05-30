@@ -49,8 +49,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if resp.Success {
 		fmt.Println("Applied successfully:", resp.Message)
-	} else {
-		fmt.Println("Apply failed:", resp.Message)
+		return nil
 	}
-	return nil
+	return fmt.Errorf("apply failed: %s", resp.Message)
 }

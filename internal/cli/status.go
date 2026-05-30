@@ -57,6 +57,10 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return wrapGRPCError(err)
 		}
+		if len(resp.Apps) == 0 {
+			fmt.Println("No applications in cluster state. Run apply while the agent is leader, then wait for reconciliation to deploy instances.")
+			return nil
+		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "NAME\tADAPTER\tREPLICAS\n")
 		for _, app := range resp.Apps {
