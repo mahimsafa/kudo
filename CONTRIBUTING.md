@@ -152,7 +152,10 @@ Use [docs/index.md](docs/index.md) to find the canonical documentation home befo
 | Your change affects… | Update this doc |
 |----------------------|-----------------|
 | Install, first cluster, basic commands | [docs/getting-started.md](docs/getting-started.md) |
-| Agent or application YAML fields | [docs/configuration.md](docs/configuration.md) |
+| CLI commands and flags | [docs/cli-usage.md](docs/cli-usage.md) |
+| Application deployment YAML fields | [docs/application-manifest.md](docs/application-manifest.md) |
+| Agent YAML fields | [docs/configuration.md](docs/configuration.md) |
+| Production deploy, troubleshooting, gaps | [docs/deploy-web-application.md](docs/deploy-web-application.md) |
 | Runtime components, data flow, consensus | [docs/architecture.md](docs/architecture.md) |
 | End-to-end app deployment (e.g. Node.js) | [docs/deploy-nodejs-docker.md](docs/deploy-nodejs-docker.md) |
 

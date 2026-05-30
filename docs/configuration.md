@@ -1,4 +1,6 @@
-# Configuration Reference
+# Agent Configuration Reference
+
+Server-side settings for `kudo agent`. Application deployment YAML is documented separately in [Application Manifest](application-manifest.md).
 
 ## Agent Config (`kudo.yaml`)
 
@@ -40,87 +42,14 @@ log:
 | `proxy.https_port` | `443` |
 | `log.level` | `info` |
 
-## Application Config
+## Application manifests
 
-```yaml
-kind: Application
-name: my-app
-adapter: docker          # docker | nodejs | python
-replicas: 3
+Deployment YAML (`kind: Application`, `spec`, `routing`, ports, adapters) is covered in [Application Manifest](application-manifest.md).
 
-spec:
-  image: myregistry/my-app:v1.0   # Docker: container image
-  entrypoint: "npm start"         # Node.js: start command
-  directory: /app                 # Working directory
-  env:
-    PORT: "8080"
-  ports:
-    - 8080
-    # Or map container, host, and ingress ports explicitly:
-    # - port: 8080        # container port your app listens on
-    #   public: 80       # port clients use on the Kudo L7 proxy (e.g. internet-facing 80)
-    #   host: 0          # optional fixed Docker host port (0 or omit = ephemeral)
+CLI commands and flags are in [CLI Usage](cli-usage.md).
 
-routing:
-  domain: api.example.com
-  path: /
-  ingress_port: 80       # optional; should match agent proxy.http_port for that listen port
-  local_access: true     # also route localhost / 127.0.0.1 (useful for local dev)
-  tls: auto                       # auto | manual | off
-  algorithm: round-robin          # round-robin | least-connections
-  healthcheck:
-    path: /health
-    interval: 10s
-    timeout: 3s
-    unhealthy_threshold: 3
-```
+## Related docs
 
-### Multi-Document Files
-
-Separate multiple applications with `---`:
-
-```yaml
-kind: Application
-name: app1
-adapter: docker
-replicas: 2
-spec:
-  image: app1:latest
----
-kind: Application
-name: app2
-adapter: docker
-replicas: 1
-spec:
-  image: app2:latest
-```
-
-## CLI Flags
-
-### `kudo agent`
-
-| Flag | Description |
-|------|-------------|
-| `-c, --config` | Path to config file (default: `/etc/kudo/kudo.yaml`) |
-| `--bootstrap` | Bootstrap a new cluster |
-| `--join` | Addresses of existing nodes to join |
-| `--token` | Join token for authentication |
-| `--name` | Node name |
-
-### `kudo apply`
-
-| Flag | Description |
-|------|-------------|
-| `-f, --file` | Path to YAML config file (required) |
-
-### `kudo scale`
-
-| Flag | Description |
-|------|-------------|
-| `--replicas` | Target replica count (required) |
-
-### `kudo token create`
-
-| Flag | Description |
-|------|-------------|
-| `--ttl` | Token time-to-live (default: `24h`) |
+- [Application Manifest](application-manifest.md)
+- [CLI Usage](cli-usage.md)
+- [Deploy a Web Application](deploy-web-application.md)

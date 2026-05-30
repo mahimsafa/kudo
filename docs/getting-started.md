@@ -139,5 +139,8 @@ Point `demo.example.com` at any cluster node's IP on the proxy port. The proxy r
 
 ## Next Steps
 
-- See [Configuration Reference](configuration.md) for all config options
-- See [Architecture](architecture.md) for how components interact
+- [CLI Usage](cli-usage.md) — all commands and flags
+- [Application Manifest](application-manifest.md) — deployment YAML reference
+- [Deploy a Web Application](deploy-web-application.md) — production end-to-end guide
+- [Agent Configuration](configuration.md) — `kudo.yaml` per server
+- [Runtime Architecture](architecture.md) — how components interact

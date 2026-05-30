@@ -48,6 +48,9 @@ kudo scale nginx-demo --replicas 3
 
 # List cluster nodes
 kudo nodes
+
+# Remove a deployment
+kudo remove -f configs/examples/docker-app.yaml
 ```
 
 ## Architecture
@@ -66,12 +69,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and docum
 
 ## Documentation
 
-- [Repository Layout](ARCHITECTURE.md)
 - [Documentation Index](docs/index.md)
-- [Getting Started](docs/getting-started.md)
+- [CLI Usage](docs/cli-usage.md) — `apply`, `remove`, `status`, `scale`, `nodes`, `token`, `agent`
+- [Application Manifest](docs/application-manifest.md) — deployment YAML fields
+- [Deploy a Web Application](docs/deploy-web-application.md) — production guide, troubleshooting, TODO
+- [Getting Started](docs/getting-started.md) — quick tutorial
+- [Agent Configuration](docs/configuration.md) — `kudo.yaml`
 - [Deploy a Node.js App (Docker)](docs/deploy-nodejs-docker.md)
-- [Configuration Reference](docs/configuration.md)
 - [Runtime Architecture](docs/architecture.md)
+- [Repository Layout](ARCHITECTURE.md)
 
 ## License
 
