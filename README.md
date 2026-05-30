@@ -17,6 +17,9 @@ curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | ba
 # User-level install
 curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --user
 
+# Development install (clone + build from main)
+curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --dev --user
+
 # Uninstall
 curl -fsSL https://raw.githubusercontent.com/mahimsafa/kudo/main/install.sh | bash -s -- --uninstall
 ```

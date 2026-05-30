@@ -21,6 +21,8 @@ fatal() { printf "${RED}[ERROR]${NC} %s\n" "$*" >&2; exit 1; }
 INSTALL_SCOPE=""       # system | user
 VERSION=""             # e.g. v0.1.0, empty = latest
 ACTION="install"       # install | uninstall
+DEV_MODE=false
+SOURCE_DIR=""
 
 # --- Usage -------------------------------------------------------------
 usage() {
@@ -33,7 +35,8 @@ Usage:
 Options:
   --system          Install system-wide (/usr/local/bin, systemd system unit)
   --user            Install for current user (~/.local/bin, systemd user unit)
-  --version VER     Install a specific version (default: latest release)
+  --dev             Build from source (clone repo, make build) instead of downloading a release
+  --version VER     Install a specific release version (default: latest; ignored with --dev)
   --uninstall       Remove kudo binary, systemd unit, and optionally data
   -h, --help        Show this help
 EOF
@@ -45,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --system)    INSTALL_SCOPE="system"; shift ;;
         --user)      INSTALL_SCOPE="user";   shift ;;
+        --dev)       DEV_MODE=true;          shift ;;
         --version)   VERSION="$2";           shift 2 ;;
         --uninstall) ACTION="uninstall";     shift ;;
         -h|--help)   usage ;;
@@ -58,10 +62,17 @@ detect_platform() {
     os="$(uname -s)"
     arch="$(uname -m)"
 
-    case "$os" in
-        Linux) ;;
-        *) fatal "Unsupported OS: $os. Kudo only supports Linux." ;;
-    esac
+    if [[ "$DEV_MODE" == true ]]; then
+        case "$os" in
+            Linux|Darwin) ;;
+            *) fatal "Unsupported OS: $os. Dev install supports Linux and macOS." ;;
+        esac
+    else
+        case "$os" in
+            Linux) ;;
+            *) fatal "Unsupported OS: $os. Kudo only supports Linux." ;;
+        esac
+    fi
 
     case "$arch" in
         x86_64|amd64)   arch="amd64" ;;
@@ -108,6 +119,15 @@ prompt_scope() {
             *) printf "Please enter 1 or 2.\n" ;;
         esac
     done
+}
+
+# --- Run command with scope-appropriate privileges ---------------------
+run_scope() {
+    if [[ "$INSTALL_SCOPE" == "system" ]]; then
+        sudo "$@"
+    else
+        "$@"
+    fi
 }
 
 # --- Fetch helpers (curl preferred, wget fallback) ---------------------
@@ -178,6 +198,51 @@ download_binary() {
     ok "Checksum verified."
 
     DOWNLOADED_BINARY="${tmp_dir}/${BINARY_NAME}"
+}
+
+# --- Dev install prerequisites -----------------------------------------
+check_dev_prerequisites() {
+    local missing=()
+    has_cmd git  || missing+=("git")
+    has_cmd go   || missing+=("go")
+    has_cmd make || missing+=("make")
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        fatal "Dev install requires: ${missing[*]}. See CONTRIBUTING.md for setup."
+    fi
+
+    ok "Build tools available (git, go, make)."
+}
+
+# --- Clone repo and build from source ----------------------------------
+build_from_source() {
+    local repo_url="https://github.com/${REPO}.git"
+    SOURCE_DIR="${DATA_DIR}/src"
+
+    run_scope mkdir -p "$DATA_DIR"
+
+    if [[ -d "${SOURCE_DIR}/.git" ]]; then
+        info "Updating existing source at ${SOURCE_DIR}..."
+        run_scope git -C "$SOURCE_DIR" fetch origin
+        run_scope git -C "$SOURCE_DIR" checkout main
+        run_scope git -C "$SOURCE_DIR" pull --ff-only origin main
+    else
+        info "Cloning ${repo_url} into ${SOURCE_DIR}..."
+        run_scope git clone "$repo_url" "$SOURCE_DIR"
+    fi
+
+    info "Building from source..."
+    run_scope make -C "$SOURCE_DIR" build
+
+    DOWNLOADED_BINARY="${SOURCE_DIR}/bin/${BINARY_NAME}"
+    if [[ ! -f "$DOWNLOADED_BINARY" ]]; then
+        fatal "Build succeeded but binary not found at ${DOWNLOADED_BINARY}"
+    fi
+
+    local commit
+    commit="$(run_scope git -C "$SOURCE_DIR" rev-parse --short HEAD)"
+    VERSION="dev (${commit})"
+    ok "Built ${VERSION} from main."
 }
 
 # --- Install binary ----------------------------------------------------
@@ -280,7 +345,11 @@ print_next_steps() {
     local ctl="systemctl"
     [[ "$INSTALL_SCOPE" == "user" ]] && ctl="systemctl --user"
 
-    printf "\n${GREEN}${BOLD}Kudo ${VERSION} installed successfully!${NC}\n\n"
+    printf "\n${GREEN}${BOLD}Kudo ${VERSION} installed successfully!${NC}\n"
+    if [[ "$DEV_MODE" == true ]]; then
+        printf "Built from ${SOURCE_DIR}\n"
+    fi
+    printf "\n"
 
     cat <<EOF
 Next steps:
@@ -378,18 +447,31 @@ main() {
         exit 0
     fi
 
-    detect_platform
-    prompt_scope
-    resolve_paths
-    resolve_version
-    check_docker
-    download_binary
-    install_binary
-    create_dirs
-    install_service
-    print_next_steps
+    if [[ "$DEV_MODE" == true ]]; then
+        detect_platform
+        prompt_scope
+        resolve_paths
+        check_dev_prerequisites
+        build_from_source
+        check_docker
+        install_binary
+        create_dirs
+        install_service
+        print_next_steps
+    else
+        detect_platform
+        prompt_scope
+        resolve_paths
+        resolve_version
+        check_docker
+        download_binary
+        install_binary
+        create_dirs
+        install_service
+        print_next_steps
 
-    rm -f "$DOWNLOADED_BINARY"
+        rm -f "$DOWNLOADED_BINARY"
+    fi
 }
 
 main
