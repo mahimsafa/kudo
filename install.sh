@@ -4,6 +4,7 @@ set -euo pipefail
 REPO="mahimsafa/kudo"
 BINARY_NAME="kudo"
 MIN_GO_VERSION="1.23"
+GO_VERSION="1.26.3"
 
 # --- Colors -----------------------------------------------------------
 RED='\033[0;31m'
@@ -304,42 +305,47 @@ install_make() {
 }
 
 install_go_latest() {
-    local latest go_os url tmp_dir go_root
-    info "Fetching latest Go version..."
-    latest="$(http_get "https://go.dev/VERSION?mode=text" | tr -d '\n')"
-    latest="${latest#go}"
+    local go_os url tmp_dir go_root
 
     case "$PLATFORM_OS" in
-        Linux)  go_os="linux" ;;
-        Darwin) go_os="darwin" ;;
+        Linux)
+            url="https://go.dev/dl/go${GO_VERSION}.linux-${PLATFORM_ARCH}.tar.gz"
+            tmp_dir="$(mktemp -d)"
+
+            info "Installing Go ${GO_VERSION}..."
+            http_download "$url" "${tmp_dir}/go.tar.gz"
+
+            if [[ "$INSTALL_SCOPE" == "system" ]]; then
+                sudo rm -rf /usr/local/go
+                sudo tar -C /usr/local -xzf "${tmp_dir}/go.tar.gz"
+                go_root="/usr/local/go"
+            else
+                go_root="${HOME}/.local/go"
+                rm -rf "$go_root"
+                mkdir -p "${HOME}/.local"
+                tar -C "${HOME}/.local" -xzf "${tmp_dir}/go.tar.gz"
+            fi
+
+            rm -rf "$tmp_dir"
+            export PATH="${go_root}/bin:${PATH}"
+            ok "Go ${GO_VERSION} installed to ${go_root}"
+
+            if [[ "$INSTALL_SCOPE" == "user" ]] && [[ ":$PATH:" != *":${go_root}/bin:"* ]]; then
+                warn "${go_root}/bin is not in your PATH."
+                warn "Add it with:  export PATH=\"${go_root}/bin:\$PATH\""
+            fi
+            ;;
+        Darwin)
+            if has_cmd brew; then
+                info "Installing Go ${GO_VERSION} via Homebrew..."
+                brew install go
+                ok "Go ${GO_VERSION} installed via Homebrew."
+            else
+                fatal "Homebrew not found. Install Go from https://go.dev/dl/ and retry."
+            fi
+            ;;
         *) fatal "Unsupported OS for Go install: ${PLATFORM_OS}" ;;
     esac
-
-    url="https://go.dev/dl/go${latest}.${go_os}-${PLATFORM_ARCH}.tar.gz"
-    tmp_dir="$(mktemp -d)"
-
-    info "Installing Go ${latest}..."
-    http_download "$url" "${tmp_dir}/go.tar.gz"
-
-    if [[ "$INSTALL_SCOPE" == "system" ]]; then
-        sudo rm -rf /usr/local/go
-        sudo tar -C /usr/local -xzf "${tmp_dir}/go.tar.gz"
-        go_root="/usr/local/go"
-    else
-        go_root="${HOME}/.local/go"
-        rm -rf "$go_root"
-        mkdir -p "${HOME}/.local"
-        tar -C "${HOME}/.local" -xzf "${tmp_dir}/go.tar.gz"
-    fi
-
-    rm -rf "$tmp_dir"
-    export PATH="${go_root}/bin:${PATH}"
-    ok "Go ${latest} installed to ${go_root}"
-
-    if [[ "$INSTALL_SCOPE" == "user" ]] && [[ ":$PATH:" != *":${go_root}/bin:"* ]]; then
-        warn "${go_root}/bin is not in your PATH."
-        warn "Add it with:  export PATH=\"${go_root}/bin:\$PATH\""
-    fi
 }
 
 ensure_git() {
